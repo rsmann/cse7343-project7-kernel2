@@ -6,7 +6,7 @@
  */
 
 /* Function Prototypes */
-int getRegisterValue(char ah, char al);
+int getRegisterValue(char rh, char rl);
 void handleInterrupt21(int ax, int bx, int cx, int dx);
 int mod(int a, int b);
 int div(int a, int b);
@@ -22,8 +22,10 @@ char interruptDisk = 0x13;
 char interruptKeyboard = 0x16;
 char interruptCustom = 0x21;
 
-char commandPrint = 0xE;
+char commandPrintString = 0x0;
+char commandReadString = 0x1;
 char commandReadSector = 0x2;
+char commandPrintCharacter = 0xE;
 
 char deviceFloppy = 0;
 
@@ -38,6 +40,7 @@ int main()
 {
 	char inputBuffer[80];
 	char sectorBuffer[512];
+	char line[80];
 
 	/* Step 1 Requirement */
 	printString("Hello World\r\n\0");
@@ -54,7 +57,14 @@ int main()
 
 	/* Step 4 Requirement */
 	makeInterrupt21();
-	interrupt(interruptCustom, 0, 0, 0, 0);
+	/* Step 5 breaks this behavior */
+	/* interrupt(interruptCustom, 0, 0, 0, 0); */
+
+	/* Step 5 Requirement */
+	/* makeInterrupt21 already executed in the step before */
+	interrupt(interruptCustom, commandReadString, line, 0, 0);
+	interrupt(interruptCustom, commandPrintString, line, 0, 0);
+	interrupt(interruptCustom, 99, 0, 0, 0);
 
 	while (1) {}
 }
@@ -62,7 +72,24 @@ int main()
 /* Handles any incoming interrupt 21 calls */
 void handleInterrupt21(int ax, int bx, int cx, int dx)
 {
-	printString("This worked!\r\n\0");
+	switch (ax)
+	{
+		case 0x0: /* commandPrintString */
+			printString(bx);
+			break;
+
+		case 0x1: /* commandReadString */
+			readString(bx);
+			printString("\r\n\0");
+			break;
+
+		case 0x2: /* commandReadSector */
+			readSector(bx, cx);
+			break;
+
+		default:
+			printString("Bad interrupt call.\r\n\0");
+	}
 }
 
 int mod(int a, int b)
@@ -88,9 +115,9 @@ int div(int a, int b)
 }
 
 /* Reusable function to calculate an integer value from a high byte and low byte*/
-int getRegisterValue(char ah, char al)
+int getRegisterValue(char rh, char rl)
 {
-	return ah * 256 + al;
+	return rh * 256 + rl;
 }
 
 /* Print a character array to the screen */
@@ -110,7 +137,7 @@ void printString(char* message)
 	/* Read each character and output it until we encounter \0 */
 	while (currentChar != charNull)
 	{
-		interrupt(interruptVideo, getRegisterValue(commandPrint, currentChar), 0, 0, 0);
+		interrupt(interruptVideo, getRegisterValue(commandPrintCharacter, currentChar), 0, 0, 0);
 		i++;
 		currentChar = message[i];
 	}
@@ -156,7 +183,7 @@ void readString(char* buffer)
 		if (currentChar != charBackspace)
 		{
 			/* Output it to the screen */
-			interrupt(interruptVideo, getRegisterValue(commandPrint, currentChar), 0, 0, 0);
+			interrupt(interruptVideo, getRegisterValue(commandPrintCharacter, currentChar), 0, 0, 0);
 
 			buffer[charIndex] = currentChar;
 			charIndex++;
@@ -166,9 +193,9 @@ void readString(char* buffer)
 			if (charIndex > 0) charIndex--;
 			{
 				/* Clear the character from the screen instead of just backing the cursor up */
-				interrupt(interruptVideo, getRegisterValue(commandPrint, charBackspace), 0, 0, 0);
-				interrupt(interruptVideo, getRegisterValue(commandPrint, charNull), 0, 0, 0);
-				interrupt(interruptVideo, getRegisterValue(commandPrint, charBackspace), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrintCharacter, charBackspace), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrintCharacter, charNull), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrintCharacter, charBackspace), 0, 0, 0);
 
 				/* Clear the character from the buffer as well. */				
 				buffer[charIndex] = charNull;
