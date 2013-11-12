@@ -7,6 +7,7 @@
 
 /* Function Prototypes */
 int getRegisterValue(char ah, char al);
+void handleInterrupt21(int ax, int bx, int cx, int dx);
 int mod(int a, int b);
 int div(int a, int b);
 void printString(char* message);
@@ -19,6 +20,7 @@ void readString(char* buffer);
 char interruptVideo = 0x10;
 char interruptDisk = 0x13;
 char interruptKeyboard = 0x16;
+char interruptCustom = 0x21;
 
 char commandPrint = 0xE;
 char commandReadSector = 0x2;
@@ -50,7 +52,17 @@ int main()
 	readSector(sectorBuffer, 30);
 	printString(sectorBuffer);
 
+	/* Step 4 Requirement */
+	makeInterrupt21();
+	interrupt(interruptCustom, 0, 0, 0, 0);
+
 	while (1) {}
+}
+
+/* Handles any incoming interrupt 21 calls */
+void handleInterrupt21(int ax, int bx, int cx, int dx)
+{
+	printString("This worked!\r\n\0");
 }
 
 int mod(int a, int b)
