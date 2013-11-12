@@ -1,0 +1,1 @@
+A basic kernel that uses interrupts to print to the screen, read a line from the keyboard, and reads a sector from disk.
