@@ -7,16 +7,24 @@
 
 /* Function Prototypes */
 int getRegisterValue(char ah, char al);
+int mod(int a, int b);
+int div(int a, int b);
 void printString(char* message);
+void readSector(char* buffer, int sector);
 void readString(char* buffer);
 
 /* Some pseudo-constants (since I'm unsure of K&R C requirements)
  * for use in calculations in other functions involving memory offsets
  */
-char videoInterrupt = 0x10;
-char inputInterrupt = 0x16;
+char interruptVideo = 0x10;
+char interruptDisk = 0x13;
+char interruptKeyboard = 0x16;
 
-char printCommand = 0xE;
+char commandPrint = 0xE;
+char commandReadSector = 0x2;
+
+char deviceFloppy = 0;
+
 
 char charBackspace = 0x8;
 char charEnter = 0xD;
@@ -27,17 +35,44 @@ char charNull = 0x0;
 int main()
 {
 	char inputBuffer[80];
+	char sectorBuffer[512];
 
-	/* Step 1 requirement */
+	/* Step 1 Requirement */
 	printString("Hello World\r\n\0");
 	
-	/* Step 2 requirement */
+	/* Step 2 Requirement */
 	printString("Enter a line: \0");
 	readString(inputBuffer);
 	printString("\r\n\0");
 	printString(inputBuffer);
 
+	/* Step 3 Requirement */
+	readSector(sectorBuffer, 30);
+	printString(sectorBuffer);
+
 	while (1) {}
+}
+
+int mod(int a, int b)
+{
+	while (a >= b)
+	{
+		a = a - b;
+	}
+
+	return a;
+}
+
+int div(int a, int b)
+{
+	int quotient = 0;
+
+	while (quotient * b < a)
+	{
+		quotient++;
+	}
+
+	return quotient;
 }
 
 /* Reusable function to calculate an integer value from a high byte and low byte*/
@@ -63,12 +98,28 @@ void printString(char* message)
 	/* Read each character and output it until we encounter \0 */
 	while (currentChar != charNull)
 	{
-		interrupt(videoInterrupt, getRegisterValue(printCommand, currentChar), 0, 0, 0);
+		interrupt(interruptVideo, getRegisterValue(commandPrint, currentChar), 0, 0, 0);
 		i++;
 		currentChar = message[i];
 	}
 
 	return;
+}
+
+/* Read a sector from disk */
+void readSector(char* buffer, int sector)
+{
+	int relativeSector = mod(sector, 18) + 1;
+	int head = mod(sector / 18, 2);
+	int track = sector / 36;
+	int sectorCount = 1;
+
+	interrupt(interruptDisk, 
+				getRegisterValue(commandReadSector, sectorCount), 
+				buffer, 
+				getRegisterValue(track, relativeSector), 
+				getRegisterValue(head, deviceFloppy));
+
 }
 
 /* Read a line from the keyboard */
@@ -88,12 +139,12 @@ void readString(char* buffer)
 	{
 		/* Read the first character from the keyboard to set up the loop */
 		/* Interrupt returns the ASCII code for the key pressed. */
-		currentChar = interrupt(inputInterrupt, 0, 0, 0, 0);
+		currentChar = interrupt(interruptKeyboard, 0, 0, 0, 0);
 
 		if (currentChar != charBackspace)
 		{
 			/* Output it to the screen */
-			interrupt(videoInterrupt, getRegisterValue(printCommand, currentChar), 0, 0, 0);
+			interrupt(interruptVideo, getRegisterValue(commandPrint, currentChar), 0, 0, 0);
 
 			buffer[charIndex] = currentChar;
 			charIndex++;
@@ -103,9 +154,9 @@ void readString(char* buffer)
 			if (charIndex > 0) charIndex--;
 			{
 				/* Clear the character from the screen instead of just backing the cursor up */
-				interrupt(videoInterrupt, getRegisterValue(printCommand, charBackspace), 0, 0, 0);
-				interrupt(videoInterrupt, getRegisterValue(printCommand, charNull), 0, 0, 0);
-				interrupt(videoInterrupt, getRegisterValue(printCommand, charBackspace), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrint, charBackspace), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrint, charNull), 0, 0, 0);
+				interrupt(interruptVideo, getRegisterValue(commandPrint, charBackspace), 0, 0, 0);
 
 				/* Clear the character from the buffer as well. */				
 				buffer[charIndex] = charNull;
